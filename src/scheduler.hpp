@@ -31,7 +31,8 @@ struct TaskImpl : AbstractTask
         :m_tup{}
     { }
 
-    TaskImpl(Fn&& fn, Args&&... args)
+    template <typename Fn_, typename... Args_>
+    TaskImpl(Fn_&& fn, Args_&&... args)
         :m_tup(std::forward<Fn>(fn), std::forward<Args>(args)...)
     { }
 
@@ -59,19 +60,16 @@ private:
     }
 };
 
-namespace
-{
-    inline TaskImpl<no_op> dangling_task;
-}
 struct Task
 {
     Task() noexcept
+        :m_call{nullptr}
     {
-        m_call = &dangling_task;
+
     }
 
     template <typename Fn, typename... Args>
-    requires (!std::is_same_v<std::remove_reference_t<Fn>, Task>)
+    requires (!std::is_same_v<std::remove_cvref_t<Fn>, Task>)
     Task(Fn&& fn, Args&&... args)
     {
         m_call = new TaskImpl<Fn, Args...>(std::forward<Fn>(fn), std::forward<Args>(args)...);
@@ -91,19 +89,19 @@ struct Task
     Task(Task&& other) noexcept
         :m_call(other.m_call)
     {
-        other.m_call = &dangling_task;
+        other.m_call = nullptr;
     }
 
     Task& operator=(Task&& other) noexcept
     {
         m_call = other.m_call;
-        other.m_call = &dangling_task;
+        other.m_call = nullptr;
         return *this;
     }
 
     ~Task() 
     {
-        if (m_call != &dangling_task)
+        if (m_call)
             delete m_call;
     }
 
